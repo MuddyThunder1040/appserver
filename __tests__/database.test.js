@@ -11,8 +11,19 @@ describe('Database Integration Tests', () => {
   });
 
   afterAll(async () => {
-    // Clean up test database
-    testDb.close();
+    // Clean up test database synchronously
+    await new Promise((resolve) => {
+      if (testDb && testDb.db) {
+        testDb.db.close((err) => {
+          if (err) {
+            // Suppress error logging during test cleanup
+          }
+          resolve();
+        });
+      } else {
+        resolve();
+      }
+    });
   });
 
   beforeEach(async () => {

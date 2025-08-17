@@ -259,7 +259,10 @@ class Database {
                 if (err) {
                     console.error('Error closing database:', err.message);
                 } else {
-                    console.log('📊 Database connection closed');
+                    // Only log if not in test environment
+                    if (process.env.NODE_ENV !== 'test' && !process.env.JEST_WORKER_ID) {
+                        console.log('📊 Database connection closed');
+                    }
                 }
             });
         }
