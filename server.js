@@ -1,12 +1,32 @@
 const express = require('express');
+const Database = require('./database');
 
 const app = express();
 const PORT = 3000;
+
+// Initialize database
+const db = new Database();
 
 // Middleware to parse JSON
 app.use(express.json());
 // Middleware to parse form data
 app.use(express.urlencoded({ extended: true }));
+
+// Logging middleware
+app.use(async (req, res, next) => {
+    try {
+        await db.logActivity(
+            'INFO', 
+            `${req.method} ${req.path}`, 
+            req.path,
+            req.get('User-Agent'),
+            req.ip
+        );
+    } catch (error) {
+        console.error('Logging error:', error);
+    }
+    next();
+});
 
 // Root endpoint
 app.get('/', (req, res) => {
@@ -67,10 +87,20 @@ app.get('/', (req, res) => {
                         <a href="/users-form">Create User</a>
                         <p>Add new user (form)</p>
                     </div>
+                    <div class="endpoint">
+                        <span class="method get">GET</span>
+                        <a href="/admin/logs">Activity Logs</a>
+                        <p>View system activity logs</p>
+                    </div>
+                    <div class="endpoint">
+                        <span class="method get">GET</span>
+                        <a href="/admin/stats">Database Stats</a>
+                        <p>View database statistics</p>
+                    </div>
                 </div>
                 
                 <div style="text-align: center; margin-top: 30px;">
-                    <p>Server running on Node.js ${process.version}</p>
+                    <p>💾 Database: SQLite | Server running on Node.js ${process.version}</p>
                 </div>
             </div>
         </body>
@@ -146,50 +176,55 @@ app.get('/api', (req, res) => {
     });
 });
 
-// Mock users data
-let users = [
-    { id: 1, name: 'John Doe', email: 'john@example.com', role: 'admin' },
-    { id: 2, name: 'Jane Smith', email: 'jane@example.com', role: 'user' },
-    { id: 3, name: 'Bob Johnson', email: 'bob@example.com', role: 'user' }
-];
-
-// Get all users
-app.get('/users', (req, res) => {
-    res.send(`
-        <!DOCTYPE html>
-        <html lang="en">
-        <head>
-            <meta charset="UTF-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>Users List</title>
-            <style>
-                body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; }
-                .container { background: rgba(255,255,255,0.1); padding: 30px; border-radius: 15px; backdrop-filter: blur(10px); }
-                .user-card { background: rgba(255,255,255,0.2); padding: 20px; margin: 15px 0; border-radius: 10px; display: flex; justify-content: space-between; align-items: center; }
-                .user-info h3 { margin: 0 0 5px 0; }
-                .user-info p { margin: 0; opacity: 0.8; }
-                .role { padding: 5px 15px; border-radius: 20px; font-size: 12px; font-weight: bold; }
-                .admin { background: #ff6b6b; }
-                .user { background: #4ecdc4; }
-                .back-btn { display: inline-block; margin-top: 20px; padding: 10px 20px; background: rgba(255,255,255,0.3); border-radius: 5px; text-decoration: none; color: white; }
-                .stats { text-align: center; margin-bottom: 20px; font-size: 18px; }
-            </style>
-        </head>
-        <body>
-            <div class="container">
-                <h1>👥 Users Directory</h1>
-                <div class="stats">Total Users: ${users.length}</div>
-                
-                ${users.map(user => `
-                    <div class="user-card">
-                        <div class="user-info">
-                            <h3>${user.name}</h3>
-                            <p>📧 ${user.email}</p>
-                            <p>🆔 ID: ${user.id}</p>
+// Helper function to escape HTML
+function escapeHtml(text) {
+  if (typeof text !== 'string') return text;
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}// Get all users
+app.get('/users', async (req, res) => {
+    try {
+        const users = await db.getAllUsers();
+        res.send(`
+            <!DOCTYPE html>
+            <html lang="en">
+            <head>
+                <meta charset="UTF-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <title>Users List</title>
+                <style>
+                    body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; }
+                    .container { background: rgba(255,255,255,0.1); padding: 30px; border-radius: 15px; backdrop-filter: blur(10px); }
+                    .user-card { background: rgba(255,255,255,0.2); padding: 20px; margin: 15px 0; border-radius: 10px; display: flex; justify-content: space-between; align-items: center; }
+                    .user-info h3 { margin: 0 0 5px 0; }
+                    .user-info p { margin: 0; opacity: 0.8; }
+                    .role { padding: 5px 15px; border-radius: 20px; font-size: 12px; font-weight: bold; }
+                    .admin { background: #ff6b6b; }
+                    .user { background: #4ecdc4; }
+                    .back-btn { display: inline-block; margin-top: 20px; padding: 10px 20px; background: rgba(255,255,255,0.3); border-radius: 5px; text-decoration: none; color: white; }
+                    .stats { text-align: center; margin-bottom: 20px; font-size: 18px; }
+                </style>
+            </head>
+            <body>
+                <div class="container">
+                    <h1>👥 Users Directory</h1>
+                    <div class="stats">Total Users: ${users.length}</div>
+                    
+                    ${users.map(user => `
+                        <div class="user-card">
+                            <div class="user-info">
+                                <h3>${escapeHtml(user.name)}</h3>
+                                <p>📧 ${escapeHtml(user.email)}</p>
+                                <p>🆔 ID: ${user.id}</p>
+                                <p>📅 Created: ${new Date(user.created_at).toLocaleDateString()}</p>
+                            </div>
+                            <div class="role ${user.role}">${user.role.toUpperCase()}</div>
                         </div>
-                        <div class="role ${user.role}">${user.role.toUpperCase()}</div>
-                    </div>
-                `).join('')}
+                    `).join('')}
                 
                 <a href="/" class="back-btn">← Back to Home</a>
                 <a href="/users-form" class="back-btn">➕ Add New User</a>
@@ -197,47 +232,53 @@ app.get('/users', (req, res) => {
         </body>
         </html>
     `);
+    } catch (error) {
+        console.error('Database error:', error);
+        res.status(500).send('Database error');
+    }
 });
 
 // Get user by ID
-app.get('/users/:id', (req, res) => {
-    const userId = parseInt(req.params.id);
-    const user = users.find(u => u.id === userId);
-    
-    if (user) {
-        res.json({
-            success: true,
-            data: user
-        });
-    } else {
-        res.status(404).json({
+app.get('/users/:id', async (req, res) => {
+    try {
+        const userId = parseInt(req.params.id);
+        const user = await db.getUserById(userId);
+        
+        if (user) {
+            res.json({
+                success: true,
+                data: user
+            });
+        } else {
+            res.status(404).json({
+                success: false,
+                message: 'User not found'
+            });
+        }
+    } catch (error) {
+        console.error('Database error:', error);
+        res.status(500).json({
             success: false,
-            message: 'User not found'
+            message: 'Database error'
         });
     }
 });
 
 // Create new user
-app.post('/users', (req, res) => {
-    const { name, email, role = 'user' } = req.body;
-    
-    if (!name || !email) {
-        return res.status(400).json({
-            success: false,
-            message: 'Name and email are required'
-        });
-    }
-    
-    const newUser = {
-        id: users.length + 1,
-        name,
-        email,
-        role
-    };
-    
-    users.push(newUser);
-    
-    res.status(201).send(`
+app.post('/users', async (req, res) => {
+    try {
+        const { name, email, role = 'user' } = req.body;
+        
+        if (!name || !email) {
+            return res.status(400).json({
+                success: false,
+                message: 'Name and email are required'
+            });
+        }
+        
+        const newUser = await db.createUser(escapeHtml(name), escapeHtml(email), role);
+        
+        res.status(201).send(`
         <!DOCTYPE html>
         <html lang="en">
         <head>
@@ -271,6 +312,13 @@ app.post('/users', (req, res) => {
         </body>
         </html>
     `);
+    } catch (error) {
+        console.error('Database error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Database error'
+        });
+    }
 });
 
 // User creation form
@@ -438,15 +486,158 @@ app.use((req, res) => {
     });
 });
 
-app.listen(PORT, () => {
-    console.log(`Server is running on http://localhost:${PORT}`);
-    console.log('Available endpoints:');
-    console.log('  GET  /');
-    console.log('  GET  /health');
-    console.log('  GET  /api');
-    console.log('  GET  /users');
-    console.log('  POST /users');
-    console.log('  GET  /users/:id');
-    console.log('  GET  /status');
-    console.log('  POST /echo');
+// Database admin endpoints
+app.get('/admin/logs', async (req, res) => {
+    try {
+        const limit = parseInt(req.query.limit) || 100;
+        const logs = await db.getLogs(limit);
+        
+        res.send(`
+            <!DOCTYPE html>
+            <html lang="en">
+            <head>
+                <meta charset="UTF-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <title>System Logs</title>
+                <style>
+                    body { font-family: Arial, sans-serif; max-width: 1200px; margin: 0 auto; padding: 20px; background: linear-gradient(135deg, #2c3e50 0%, #4a6741 100%); color: white; }
+                    .container { background: rgba(255,255,255,0.1); padding: 30px; border-radius: 15px; backdrop-filter: blur(10px); }
+                    .log-entry { background: rgba(255,255,255,0.1); padding: 15px; margin: 10px 0; border-radius: 8px; border-left: 4px solid #3498db; }
+                    .log-header { display: flex; justify-content: space-between; margin-bottom: 5px; }
+                    .log-time { color: #bdc3c7; font-size: 12px; }
+                    .log-level { padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; }
+                    .log-level.INFO { background: #3498db; }
+                    .log-level.ERROR { background: #e74c3c; }
+                    .log-level.WARN { background: #f39c12; }
+                    .back-btn { display: inline-block; margin-top: 20px; padding: 10px 20px; background: rgba(255,255,255,0.3); border-radius: 5px; text-decoration: none; color: white; }
+                </style>
+            </head>
+            <body>
+                <div class="container">
+                    <h1>📋 System Activity Logs</h1>
+                    <p>Showing last ${logs.length} entries</p>
+                    
+                    ${logs.map(log => `
+                        <div class="log-entry">
+                            <div class="log-header">
+                                <span class="log-level ${log.level}">${log.level}</span>
+                                <span class="log-time">${new Date(log.created_at).toLocaleString()}</span>
+                            </div>
+                            <div><strong>${escapeHtml(log.message)}</strong></div>
+                            ${log.endpoint ? `<div>Endpoint: ${escapeHtml(log.endpoint)}</div>` : ''}
+                            ${log.user_agent ? `<div>User Agent: ${escapeHtml(log.user_agent)}</div>` : ''}
+                        </div>
+                    `).join('')}
+                    
+                    <a href="/" class="back-btn">← Back to Home</a>
+                    <a href="/admin/stats" class="back-btn">📊 View Stats</a>
+                </div>
+            </body>
+            </html>
+        `);
+    } catch (error) {
+        console.error('Database error:', error);
+        res.status(500).send('Database error');
+    }
 });
+
+app.get('/admin/stats', async (req, res) => {
+    try {
+        const stats = await db.getStats();
+        
+        res.send(`
+            <!DOCTYPE html>
+            <html lang="en">
+            <head>
+                <meta charset="UTF-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <title>Database Statistics</title>
+                <style>
+                    body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; background: linear-gradient(135deg, #8e44ad 0%, #3498db 100%); color: white; }
+                    .container { background: rgba(255,255,255,0.1); padding: 30px; border-radius: 15px; backdrop-filter: blur(10px); }
+                    .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin: 20px 0; }
+                    .stat-card { background: rgba(255,255,255,0.2); padding: 25px; border-radius: 10px; text-align: center; }
+                    .stat-number { font-size: 36px; font-weight: bold; margin-bottom: 10px; }
+                    .stat-label { font-size: 14px; opacity: 0.8; text-transform: uppercase; }
+                    .back-btn { display: inline-block; margin-top: 20px; padding: 10px 20px; background: rgba(255,255,255,0.3); border-radius: 5px; text-decoration: none; color: white; }
+                </style>
+            </head>
+            <body>
+                <div class="container">
+                    <h1>📊 Database Statistics</h1>
+                    
+                    <div class="stats-grid">
+                        <div class="stat-card">
+                            <div class="stat-number">${stats.totalUsers}</div>
+                            <div class="stat-label">Total Users</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-number">${stats.adminUsers}</div>
+                            <div class="stat-label">Admin Users</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-number">${stats.totalLogs}</div>
+                            <div class="stat-label">Total Log Entries</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-number">${stats.recentLogs}</div>
+                            <div class="stat-label">Recent Activity (1h)</div>
+                        </div>
+                    </div>
+                    
+                    <a href="/" class="back-btn">← Back to Home</a>
+                    <a href="/admin/logs" class="back-btn">📋 View Logs</a>
+                </div>
+            </body>
+            </html>
+        `);
+    } catch (error) {
+        console.error('Database error:', error);
+        res.status(500).send('Database error');
+    }
+});
+
+// Initialize database and start server
+async function startServer() {
+    try {
+        await db.init();
+        
+        app.listen(PORT, () => {
+            console.log(`Server is running on http://localhost:${PORT}`);
+            console.log('Available endpoints:');
+            console.log('  GET  /');
+            console.log('  GET  /health');
+            console.log('  GET  /api');
+            console.log('  GET  /users');
+            console.log('  POST /users');
+            console.log('  GET  /users/:id');
+            console.log('  GET  /status');
+            console.log('  POST /echo');
+            console.log('  GET  /admin/logs');
+            console.log('  GET  /admin/stats');
+        });
+    } catch (error) {
+        console.error('Failed to start server:', error);
+        process.exit(1);
+    }
+}
+
+// Handle graceful shutdown
+process.on('SIGINT', () => {
+    console.log('\n🛑 Shutting down server...');
+    db.close();
+    process.exit(0);
+});
+
+// Start the server
+startServer();
+    console.log('  GET  /health');
+// Export app for testing (only when not starting the server directly)
+if (require.main !== module) {
+    // For testing, we need to make admin endpoints available
+    // without starting the database async initialization
+    module.exports = app;
+} else {
+    // Only run startServer when this file is executed directly
+    startServer();
+}

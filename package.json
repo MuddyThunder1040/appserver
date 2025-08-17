@@ -16,11 +16,18 @@
   "type": "commonjs",
   "main": "server.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "node server.js"
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage",
+    "start": "node server.js",
+    "dev": "node server.js"
   },
   "dependencies": {
-    "express": "^5.1.0"
+    "express": "^5.1.0",
+    "sqlite3": "^5.1.7"
   },
-  "devDependencies": {}
+  "devDependencies": {
+    "jest": "^30.0.5",
+    "supertest": "^7.1.4"
+  }
 }
