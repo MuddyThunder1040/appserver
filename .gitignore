@@ -127,4 +127,3 @@ build/Release
 
 # Docker
 .dockerignore
-*package*
